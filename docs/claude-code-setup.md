@@ -59,30 +59,74 @@ Output: `target/release/Hermes`
 
 ### 2. MCP Server Configuration
 
-Claude Code reads MCP server configurations from `~/.claude/settings.json`. The following configuration was added:
+Claude Code uses the `claude mcp` CLI commands to manage MCP servers. There are three scopes:
+
+| Scope | Storage | Use Case |
+|-------|---------|----------|
+| `local` (default) | `~/.claude.json` per project | Personal servers for a specific project |
+| `project` | `.mcp.json` in project root | Team-shared servers (checked into git) |
+| `user` | `~/.claude.json` global | Personal servers across all projects |
+
+#### Option A: User Scope (Recommended)
+
+Make hermes available across all your projects:
+
+```bash
+claude mcp add hermes --scope user --transport stdio \
+  -e HERMES_PROJECT_ROOT=. \
+  -- /path/to/hermes/target/release/Hermes --stdio
+```
+
+#### Option B: Project Scope (Team Sharing)
+
+Add to a specific project for team use (creates `.mcp.json`):
+
+```bash
+claude mcp add hermes --scope project --transport stdio \
+  -e HERMES_PROJECT_ROOT=. \
+  -- /path/to/hermes/target/release/Hermes --stdio
+```
+
+Or create `.mcp.json` manually in your project root:
 
 ```json
 {
   "mcpServers": {
     "hermes": {
-      "type": "stdio",
       "command": "/path/to/hermes/target/release/Hermes",
       "args": ["--stdio"],
       "env": {
-        "HERMES_PROJECT_ROOT": "${workspaceFolder}"
+        "HERMES_PROJECT_ROOT": "."
       }
     }
   }
 }
 ```
 
-Configuration explained:
-- `type: "stdio"` - Communication via stdin/stdout (JSON-RPC 2.0)
-- `command` - Absolute path to the Hermes binary
-- `args: ["--stdio"]` - Flag that tells Hermes to run as MCP server
-- `env.HERMES_PROJECT_ROOT` - Project root for indexing; `${workspaceFolder}` is replaced by Claude Code with the current working directory
+#### Option C: Local Scope (Single Project, Personal)
 
-### 3. Database Location
+```bash
+claude mcp add hermes --transport stdio \
+  -e HERMES_PROJECT_ROOT=. \
+  -- /path/to/hermes/target/release/Hermes --stdio
+```
+
+### 3. Verify Configuration
+
+```bash
+# List all configured MCP servers
+claude mcp list
+
+# Check specific server details
+claude mcp get hermes
+```
+
+Expected output:
+```
+hermes: /path/to/hermes/target/release/Hermes --stdio - ✓ Connected
+```
+
+### 4. Database Location
 
 Hermes stores its knowledge graph in SQLite:
 - Default location: `<project_root>/.hermes.db`
@@ -196,15 +240,23 @@ Search strategy:
    ls -la /path/to/hermes/target/release/Hermes
    ```
 
-2. Test the server manually:
+2. Check MCP server status:
+   ```bash
+   claude mcp list
+   ```
+
+3. Test the server manually:
    ```bash
    echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}' | \
    HERMES_PROJECT_ROOT=/path/to/project ./target/release/Hermes --stdio
    ```
 
-3. Check settings.json syntax:
+4. Remove and re-add the server:
    ```bash
-   cat ~/.claude/settings.json | jq .
+   claude mcp remove hermes
+   claude mcp add hermes --scope user --transport stdio \
+     -e HERMES_PROJECT_ROOT=. \
+     -- /path/to/hermes/target/release/Hermes --stdio
    ```
 
 ### No Search Results
@@ -233,6 +285,23 @@ Session ID is the current date (YYYY-MM-DD), so stats accumulate daily and reset
 ## File Locations
 
 ```
-~/.claude/settings.json          # MCP server configuration
-<project>/.hermes.db             # Knowledge graph database (per project)
+~/.claude.json               # User/local MCP server configurations
+<project>/.mcp.json          # Project-scoped MCP servers (team-shared)
+<project>/.hermes.db         # Knowledge graph database (per project)
+```
+
+## Managing MCP Servers
+
+```bash
+# List all servers
+claude mcp list
+
+# Get details for a server
+claude mcp get hermes
+
+# Remove a server
+claude mcp remove hermes
+
+# Remove from specific scope
+claude mcp remove hermes --scope user
 ```
